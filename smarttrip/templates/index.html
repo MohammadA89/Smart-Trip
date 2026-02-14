@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#070A14" />
+    <title data-i18n="app_title">SmartTrip — Intelligent Hangout Recommendations</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+
+  <body>
+    <div class="bg" aria-hidden="true"></div>
+
+    <header class="header glass">
+      <div class="container header__inner">
+        <a class="brand" href="#top" aria-label="SmartTrip home">
+          <span class="brand__mark" aria-hidden="true">S</span>
+          <span class="brand__text">SmartTrip</span>
+          <span class="brand__badge">AI</span>
+        </a>
+
+        <nav class="nav" aria-label="Primary">
+          <a class="nav__link" href="#engine" data-i18n="nav_engine">Engine</a>
+          <a class="nav__link" href="#mapSection" data-i18n="nav_map">Map</a>
+          <a class="nav__link" href="#results" data-i18n="nav_results">Results</a>
+        </nav>
+
+        <div class="header__actions">
+          <div class="segmented segmented--2 segmented--compact" role="radiogroup" aria-label="Language">
+            <input type="radio" name="lang" id="langEn" value="en" checked />
+            <label for="langEn">English</label>
+
+            <input type="radio" name="lang" id="langFa" value="fa" />
+            <label for="langFa">فارسی</label>
+          </div>
+          <button class="btn btn-ghost" type="button" id="useLocationBtn">
+            Use my location
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="page" id="top">
+      <section class="container hero">
+        <div class="hero__copy">
+          <p class="eyebrow" data-i18n="hero_eyebrow">
+            Smart scoring • Real-world nearby places • Explanation-first
+          </p>
+          <h1 class="hero__title" data-i18n="hero_title">
+            Find the best place to hang out — instantly, intelligently.
+          </h1>
+          <p class="hero__sub" data-i18n="hero_sub">
+            Answer 5 quick questions. SmartTrip scores nearby options on distance,
+            budget fit, group context, and activity match — then shows you the
+            reason behind every recommendation.
+          </p>
+
+          <div class="hero__highlights">
+            <div class="highlight glass">
+              <div class="highlight__kpi" id="kpiPersonalization" data-i18n="kpi_personal">Personal</div>
+              <div class="highlight__label" data-i18n="kpi_personal_label">Personalization</div>
+            </div>
+            <div class="highlight glass">
+              <div class="highlight__kpi" id="kpiExplainable" data-i18n="kpi_explain">Explainable</div>
+              <div class="highlight__label" data-i18n="kpi_explain_label">Decision-making</div>
+            </div>
+            <div class="highlight glass">
+              <div class="highlight__kpi" id="kpiFast" data-i18n="kpi_fast">Fast</div>
+              <div class="highlight__label" data-i18n="kpi_fast_label">Student-friendly</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="container workspace">
+        <div class="workspace__left">
+          <section class="panel glass" aria-labelledby="prefsTitle">
+            <div class="panel__head">
+              <h2 class="panel__title" id="prefsTitle" data-i18n="prefs_title">Personalize</h2>
+              <span class="pill" id="prefsStatus">Ready</span>
+            </div>
+
+            <form id="prefsForm" class="form">
+              <div class="field">
+                <div class="field__row">
+                  <label class="field__label" for="hasCar" data-i18n="label_car">Car availability</label>
+                  <span class="field__hint" id="carHint" data-i18n="hint_car">Affects distance tolerance</span>
+                </div>
+
+                <div class="switch">
+                  <input class="switch__input" type="checkbox" id="hasCar" />
+                  <label class="switch__label" for="hasCar">
+                    <span class="switch__track" aria-hidden="true">
+                      <span class="switch__thumb"></span>
+                    </span>
+                    <span class="switch__text" data-i18n="switch_car">I have a car</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="field__row">
+                  <label class="field__label" for="peopleCount">
+                    <span data-i18n="label_people">Number of people</span>
+                    <span class="chip" id="peopleCountLabel">3</span>
+                  </label>
+                  <span class="field__hint" data-i18n="hint_people">Used to fit place vibe</span>
+                </div>
+                <input
+                  class="range"
+                  type="range"
+                  id="peopleCount"
+                  min="1"
+                  max="10"
+                  value="3"
+                />
+                <div class="range__meta" aria-hidden="true">
+                  <span>1</span>
+                  <span>10</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="field__row">
+                  <span class="field__label" data-i18n="label_search_area">Search area</span>
+                  <span class="field__hint" data-i18n="hint_search_area">Nearby radius or whole city</span>
+                </div>
+                <div class="segmented segmented--2" role="radiogroup" aria-label="Search area">
+                  <input type="radio" name="search_mode" id="modeRadius" value="radius" checked />
+                  <label for="modeRadius" data-i18n="mode_radius">Nearby</label>
+
+                  <input type="radio" name="search_mode" id="modeCity" value="city" />
+                  <label for="modeCity" data-i18n="mode_city">City</label>
+                </div>
+              </div>
+
+              <div class="field" id="radiusField">
+                <div class="field__row">
+                  <label class="field__label" for="radiusKm">
+                    <span data-i18n="label_radius">Search radius</span>
+                    <span class="chip" id="radiusLabel">4.5 km</span>
+                  </label>
+                  <span class="field__hint" data-i18n="hint_radius">How far to look for places</span>
+                </div>
+                <input
+                  class="range"
+                  type="range"
+                  id="radiusKm"
+                  min="1"
+                  max="15"
+                  step="0.5"
+                  value="4.5"
+                />
+                <div class="range__meta" aria-hidden="true">
+                  <span>1 km</span>
+                  <span>15 km</span>
+                </div>
+              </div>
+
+              <div class="field" id="cityField" hidden>
+                <div class="field__row">
+                  <label class="field__label" for="cityInput" data-i18n="label_city">City</label>
+                  <span class="field__hint" data-i18n="hint_city">Search across the whole city</span>
+                </div>
+                <input
+                  class="text-input"
+                  type="text"
+                  id="cityInput"
+                  placeholder="Tehran / تهران"
+                  autocomplete="address-level2"
+                  spellcheck="false"
+                  maxlength="80"
+                />
+              </div>
+
+              <div class="field">
+                <div class="field__row">
+                  <span class="field__label" data-i18n="label_with">With</span>
+                  <span class="field__hint" data-i18n="hint_with">Solo / friends / family</span>
+                </div>
+                <div class="segmented" role="radiogroup" aria-label="Group type">
+                  <input type="radio" name="group_type" id="groupSolo" value="solo" checked />
+                  <label for="groupSolo" data-i18n="group_solo">Solo</label>
+
+                  <input type="radio" name="group_type" id="groupFriends" value="friends" />
+                  <label for="groupFriends" data-i18n="group_friends">Friends</label>
+
+                  <input type="radio" name="group_type" id="groupFamily" value="family" />
+                  <label for="groupFamily" data-i18n="group_family">Family</label>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="field__row">
+                  <span class="field__label" data-i18n="label_budget">Budget</span>
+                  <span class="field__hint" data-i18n="hint_budget">Low / medium / open</span>
+                </div>
+                <div class="segmented" role="radiogroup" aria-label="Budget">
+                  <input type="radio" name="budget" id="budgetLow" value="low" />
+                  <label for="budgetLow" data-i18n="budget_low">Low</label>
+
+                  <input type="radio" name="budget" id="budgetMedium" value="medium" checked />
+                  <label for="budgetMedium" data-i18n="budget_medium">Medium</label>
+
+                  <input type="radio" name="budget" id="budgetOpen" value="open" />
+                  <label for="budgetOpen" data-i18n="budget_open">Open</label>
+                </div>
+              </div>
+
+              <div class="field">
+                <div class="field__row">
+                  <span class="field__label" data-i18n="label_activity">Activity type</span>
+                  <span class="field__hint" data-i18n="hint_activity">Choose the main vibe</span>
+                </div>
+
+                <div class="activity-grid" role="radiogroup" aria-label="Activity type">
+                  <input type="radio" name="activity" id="actNature" value="nature" checked />
+                  <label class="activity" for="actNature">
+                    <span class="activity__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M12 2c3.5 3.4 6 7.2 6 11.2A6 6 0 1 1 6 13.2C6 9.2 8.5 5.4 12 2Z"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                        />
+                        <path
+                          d="M12 9v13"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                    </span>
+                    <span class="activity__name" data-i18n="act_nature">Nature</span>
+                  </label>
+
+                  <input type="radio" name="activity" id="actCafe" value="cafe" />
+                  <label class="activity" for="actCafe">
+                    <span class="activity__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M4 8h12v5a6 6 0 0 1-6 6H8a4 4 0 0 1-4-4V8Z"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                        />
+                        <path
+                          d="M16 9h2a2 2 0 0 1 0 4h-2"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M6 4s1 1 1 2-1 2-1 2"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M10 4s1 1 1 2-1 2-1 2"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                    </span>
+                    <span class="activity__name" data-i18n="act_cafe">Café</span>
+                  </label>
+
+                  <input type="radio" name="activity" id="actRestaurant" value="restaurant" />
+                  <label class="activity" for="actRestaurant">
+                    <span class="activity__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M7 3v8M10 3v8M7 7h3"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M14 3v7a3 3 0 0 0 3 3v8"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                    </span>
+                    <span class="activity__name" data-i18n="act_restaurant">Restaurant</span>
+                  </label>
+
+                  <input type="radio" name="activity" id="actEntertainment" value="entertainment" />
+                  <label class="activity" for="actEntertainment">
+                    <span class="activity__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M4 7h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                        />
+                        <path
+                          d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                        />
+                        <path
+                          d="M9 12l6 3-6 3v-6Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </span>
+                    <span class="activity__name" data-i18n="act_entertainment">Entertainment</span>
+                  </label>
+                </div>
+              </div>
+
+              <button class="btn btn-primary" type="submit" id="ctaBtn">
+                <span class="btn-primary__label" data-i18n="cta_label">Find the Best Place</span>
+                <span class="btn-primary__shine" aria-hidden="true"></span>
+              </button>
+
+              <p class="form__footer" id="locationHint">
+                Using a demo location until you allow location access.
+              </p>
+            </form>
+          </section>
+
+          <section class="panel glass" id="engine" aria-labelledby="engineTitle">
+            <div class="panel__head">
+              <h2 class="panel__title" id="engineTitle" data-i18n="engine_title">Decision Engine</h2>
+              <span class="pill pill--accent" id="engineState" data-i18n="engine_state">Explainable</span>
+            </div>
+
+            <p class="muted" data-i18n-html="engine_desc">
+              A transparent scoring model that adapts to your conditions.
+              You always see <span class="neon">why</span> a place wins.
+            </p>
+
+            <div class="weights" aria-label="Scoring weights">
+              <div class="weight">
+                <div class="weight__row">
+                  <span data-i18n="w_distance">Distance</span><span class="mono" id="wDistance">—</span>
+                </div>
+                <div class="bar"><div class="bar__fill" id="bDistance"></div></div>
+              </div>
+
+              <div class="weight">
+                <div class="weight__row">
+                  <span data-i18n="w_activity">Activity match</span><span class="mono" id="wActivity">—</span>
+                </div>
+                <div class="bar"><div class="bar__fill" id="bActivity"></div></div>
+              </div>
+
+              <div class="weight">
+                <div class="weight__row">
+                  <span data-i18n="w_group">Group context</span><span class="mono" id="wGroup">—</span>
+                </div>
+                <div class="bar"><div class="bar__fill" id="bGroup"></div></div>
+              </div>
+
+              <div class="weight">
+                <div class="weight__row">
+                  <span data-i18n="w_budget">Budget fit</span><span class="mono" id="wBudget">—</span>
+                </div>
+                <div class="bar"><div class="bar__fill" id="bBudget"></div></div>
+              </div>
+            </div>
+
+            <div class="chips" id="personalChips" aria-label="Personalization chips"></div>
+          </section>
+
+          <section class="panel glass" id="chatPanel" aria-labelledby="chatTitle">
+            <div class="panel__head">
+              <h2 class="panel__title" id="chatTitle" data-i18n="chat_title">Chat</h2>
+              <span class="pill" id="chatStatus">Ready</span>
+            </div>
+
+            <div class="chat" aria-label="SmartTrip chat">
+              <div class="chat__log" id="chatLog" aria-live="polite"></div>
+              <form class="chat__form" id="chatForm" autocomplete="off">
+                <input
+                  class="text-input chat__input"
+                  type="text"
+                  id="chatInput"
+                  data-i18n-placeholder="chat_placeholder"
+                  placeholder="Example: «کافه دنج توی تهران با بودجه کم»"
+                  spellcheck="false"
+                  maxlength="240"
+                />
+                <button class="btn btn-ghost" type="submit" data-i18n="chat_send">Send</button>
+              </form>
+              <p class="muted chat__hint" data-i18n="chat_hint">
+                Tip: mention a city (“توی تهران”) or a radius (“۵ کیلومتر”) and we’ll apply it automatically.
+              </p>
+            </div>
+          </section>
+        </div>
+
+        <div class="workspace__right" id="mapSection">
+          <section class="map-card glass" aria-labelledby="mapTitle">
+            <div class="map-card__head">
+              <div>
+                <h2 class="panel__title" id="mapTitle" data-i18n="map_title">Live Map</h2>
+                <p class="map-card__sub" id="mapSub">Ready to search</p>
+              </div>
+              <div class="map-card__actions">
+                <button class="btn btn-ghost" type="button" id="recenterBtn">
+                  <span data-i18n="map_recenter">Re-center</span>
+                </button>
+                <button class="btn btn-ghost" type="button" id="clearBtn">
+                  <span data-i18n="map_clear">Clear</span>
+                </button>
+              </div>
+            </div>
+            <div class="map" id="map" role="application" aria-label="Interactive map"></div>
+            <div class="map-card__footer">
+              <span class="meta" id="mapMeta" data-i18n="map_meta">
+                Dark map • Neon markers • Minimal controls
+              </span>
+              <span class="meta meta--right" id="dataSourceMeta">Data: —</span>
+            </div>
+          </section>
+
+          <section class="results" id="results" aria-labelledby="resultsTitle">
+            <div class="results__head">
+              <h2 class="panel__title" id="resultsTitle" data-i18n="results_title">Top Recommendations</h2>
+              <div class="results__meta">
+                <span class="mono" id="resultsMeta" data-i18n="results_empty">Run a search to see results.</span>
+              </div>
+            </div>
+
+            <div class="cards" id="cards" aria-live="polite"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <noscript>
+      <div class="noscript">
+        <span data-i18n="noscript">
+          SmartTrip needs JavaScript enabled for the interactive map and smart
+          recommendations.
+        </span>
+      </div>
+    </noscript>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  </body>
+</html>

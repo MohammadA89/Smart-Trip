@@ -56,6 +56,7 @@ except ImportError:  # pragma: no cover
 
 DEFAULT_ORIGIN: Tuple[float, float] = (35.6892, 51.3890)
 _MAX_ABS_WEIGHT = 6.0
+_RECOMMENDATION_LIMIT = 10
 _ALLOWED_ACTIVITIES = {
     "nature",
     "cafe",
@@ -173,6 +174,34 @@ def _filter_demo_places_by_primary(places: List[Dict[str, Any]], primary: List[s
         return list(places)
     filtered = [p for p in places if _primary_activity(str(p.get("type") or "nature")) in allow]
     return filtered if filtered else list(places)
+
+
+def _expand_demo_places(places: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+    base = list(places)
+    if len(base) >= limit:
+        return base[:limit]
+    if not base:
+        return base
+
+    out = list(base)
+    i = 0
+    while len(out) < limit:
+        src = base[i % len(base)]
+        i += 1
+        k = (i // len(base)) + 1
+        try:
+            lat = float(src.get("lat"))
+            lon = float(src.get("lon"))
+        except (TypeError, ValueError):
+            lat = 35.6892
+            lon = 51.3890
+        offset = 0.0007 * float(k)
+        clone = dict(src)
+        clone["name"] = f"{str(src.get('name') or 'Place')} #{k}"
+        clone["lat"] = lat + offset
+        clone["lon"] = lon - offset
+        out.append(clone)
+    return out[:limit]
 
 
 def _dedupe_places(places: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
@@ -305,7 +334,10 @@ def create_app() -> Flask:
 
         data_source = "osm" if places else "demo"
         if not places:
-            places = _filter_demo_places_by_primary(demo_places(origin[0], origin[1]), selected_primary)
+            places = _expand_demo_places(
+                _filter_demo_places_by_primary(demo_places(origin[0], origin[1]), selected_primary),
+                _RECOMMENDATION_LIMIT * 2,
+            )
 
         db_path = str(app.config["SMARTTRIP_DB_PATH"])
         conn = connect_db(db_path)
@@ -332,20 +364,26 @@ def create_app() -> Flask:
                 "city": city or None,
             }
 
-            recommendations = rank_places(places, context=context, weights=weights, limit=5)
-            if data_source == "osm" and len(recommendations) < 5:
+            recommendations = rank_places(places, context=context, weights=weights, limit=_RECOMMENDATION_LIMIT)
+            if data_source == "osm" and len(recommendations) < _RECOMMENDATION_LIMIT:
                 # OSM may return too few candidates for a small radius.
                 # Keep all OSM picks, and top-up with demo candidates.
                 demo_candidates = _filter_demo_places_by_primary(
                     demo_places(origin[0], origin[1]),
                     selected_primary,
                 )
-                demo_ranked = rank_places(demo_candidates, context=context, weights=weights, limit=5)
-                needed = max(0, 5 - len(recommendations))
+                demo_candidates = _expand_demo_places(demo_candidates, _RECOMMENDATION_LIMIT * 2)
+                demo_ranked = rank_places(
+                    demo_candidates,
+                    context=context,
+                    weights=weights,
+                    limit=_RECOMMENDATION_LIMIT,
+                )
+                needed = max(0, _RECOMMENDATION_LIMIT - len(recommendations))
                 if needed:
                     recommendations = _dedupe_places(
                         list(recommendations) + list(demo_ranked[:needed]),
-                        limit=5,
+                        limit=_RECOMMENDATION_LIMIT,
                     )
                     data_source = "osm+demo"
 

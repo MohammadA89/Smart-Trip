@@ -40,6 +40,26 @@ def _budget_tier(budget: Budget) -> int:
 
 def _canonical_activity(activity: str) -> ActivityType:
     activity = (activity or "").strip().lower()
+    alias = {
+        "fast_food": "restaurant",
+        "juice": "cafe",
+        "ice_cream": "cafe",
+        "park": "nature",
+        "attraction": "nature",
+        "nature_tourism": "nature",
+        "historical": "nature",
+        "cinema": "entertainment",
+        "amusement_park": "entertainment",
+        "theatre": "entertainment",
+        "museum": "entertainment",
+        "pool": "entertainment",
+        "hotel": "entertainment",
+        "eco_lodge": "nature",
+        "hostel": "entertainment",
+        "market": "entertainment",
+        "shopping_mall": "entertainment",
+    }
+    activity = alias.get(activity, activity)
     if activity in {"nature", "cafe", "restaurant", "entertainment"}:
         return activity  # type: ignore[return-value]
     return "nature"

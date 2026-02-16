@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Flask, jsonify, render_template, request
 
@@ -56,6 +56,48 @@ except ImportError:  # pragma: no cover
 
 DEFAULT_ORIGIN: Tuple[float, float] = (35.6892, 51.3890)
 _MAX_ABS_WEIGHT = 6.0
+_ALLOWED_ACTIVITIES = {
+    "nature",
+    "cafe",
+    "restaurant",
+    "entertainment",
+    "fast_food",
+    "juice",
+    "ice_cream",
+    "park",
+    "attraction",
+    "nature_tourism",
+    "historical",
+    "cinema",
+    "amusement_park",
+    "theatre",
+    "museum",
+    "pool",
+    "hotel",
+    "eco_lodge",
+    "hostel",
+    "market",
+    "shopping_mall",
+}
+_PRIMARY_BY_ACTIVITY = {
+    "fast_food": "restaurant",
+    "juice": "cafe",
+    "ice_cream": "cafe",
+    "park": "nature",
+    "attraction": "nature",
+    "nature_tourism": "nature",
+    "historical": "nature",
+    "cinema": "entertainment",
+    "amusement_park": "entertainment",
+    "theatre": "entertainment",
+    "museum": "entertainment",
+    "pool": "entertainment",
+    "hotel": "entertainment",
+    "eco_lodge": "nature",
+    "hostel": "entertainment",
+    "market": "entertainment",
+    "shopping_mall": "entertainment",
+}
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -95,6 +137,64 @@ def _clip_weights(weights: dict) -> dict:
     return clipped
 
 
+def _normalize_activities(payload: Dict[str, Any]) -> List[str]:
+    out: List[str] = []
+    raw_list = payload.get("activities")
+    if isinstance(raw_list, list):
+        for item in raw_list:
+            key = str(item or "").strip().lower()
+            if key and key in _ALLOWED_ACTIVITIES and key not in out:
+                out.append(key)
+    if not out:
+        key = str(payload.get("activity") or "nature").strip().lower()
+        if key not in _ALLOWED_ACTIVITIES:
+            key = "nature"
+        out.append(key)
+    return out
+
+
+def _primary_activity(activity: str) -> str:
+    key = str(activity or "").strip().lower()
+    return _PRIMARY_BY_ACTIVITY.get(key, key if key in {"nature", "cafe", "restaurant", "entertainment"} else "nature")
+
+
+def _primary_activities(activities: List[str]) -> List[str]:
+    out: List[str] = []
+    for activity in activities:
+        key = _primary_activity(activity)
+        if key not in out:
+            out.append(key)
+    return out or ["nature"]
+
+
+def _filter_demo_places_by_primary(places: List[Dict[str, Any]], primary: List[str]) -> List[Dict[str, Any]]:
+    allow = {str(x).strip().lower() for x in primary}
+    if not allow:
+        return list(places)
+    filtered = [p for p in places if _primary_activity(str(p.get("type") or "nature")) in allow]
+    return filtered if filtered else list(places)
+
+
+def _dedupe_places(places: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+    seen = set()
+    unique: List[Dict[str, Any]] = []
+    for place in places:
+        name = str(place.get("name") or "").strip().lower()
+        try:
+            lat = round(float(place.get("lat")), 6)
+            lon = round(float(place.get("lon")), 6)
+            sig = (name, lat, lon)
+        except (TypeError, ValueError):
+            sig = (name, str(place.get("osm_kind") or ""), str(place.get("osm_id") or ""))
+        if sig in seen:
+            continue
+        seen.add(sig)
+        unique.append(place)
+        if len(unique) >= limit:
+            break
+    return unique
+
+
 def create_app() -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     os.makedirs(app.instance_path, exist_ok=True)
@@ -118,7 +218,9 @@ def create_app() -> Flask:
         session_id_raw = payload.get("session_id")
         session_id = session_id_raw.strip() if isinstance(session_id_raw, str) else None
 
-        user_activity = payload.get("activity", "nature")
+        selected_activities = _normalize_activities(payload)
+        selected_primary = _primary_activities(selected_activities)
+        user_activity = selected_primary[0]
         user_group_type = payload.get("group_type", "friends")
         user_budget = payload.get("budget", "medium")
         people_count = payload.get("people_count", 2)
@@ -155,7 +257,13 @@ def create_app() -> Flask:
         radius_m = max(1000, min(15000, radius_m))
 
         if city and city_info:
-            places = get_places_city(city, activity=user_activity, timeout_s=12.0, limit=200)
+            places: List[Dict[str, Any]] = []
+            per_activity_limit = max(30, int(200 / max(1, len(selected_activities))))
+            for activity in selected_activities:
+                places.extend(
+                    get_places_city(city, activity=activity, timeout_s=12.0, limit=per_activity_limit)
+                )
+            places = _dedupe_places(places, limit=250)
             search_mode_out = "city"
             if not places:
                 city_lat = _safe_float(city_info.get("lat")) if isinstance(city_info, dict) else None
@@ -164,29 +272,40 @@ def create_app() -> Flask:
                     # City-area queries can be slow/unavailable; fall back to a large-radius
                     # search around the city center before using demo data.
                     fallback_radius_m = 15000
-                    places = get_places(
-                        city_lat,
-                        city_lon,
-                        radius=fallback_radius_m,
-                        activity=user_activity,
-                        timeout_s=8.0,
-                        limit=80,
-                    )
+                    per_activity_limit = max(20, int(80 / max(1, len(selected_activities))))
+                    for activity in selected_activities:
+                        places.extend(
+                            get_places(
+                                city_lat,
+                                city_lon,
+                                radius=fallback_radius_m,
+                                activity=activity,
+                                timeout_s=8.0,
+                                limit=per_activity_limit,
+                            )
+                        )
+                    places = _dedupe_places(places, limit=120)
         else:
-            places = get_places(
-                origin[0],
-                origin[1],
-                radius=radius_m,
-                activity=user_activity,
-                timeout_s=8.0,
-                limit=80,
-            )
+            places = []
+            per_activity_limit = max(20, int(80 / max(1, len(selected_activities))))
+            for activity in selected_activities:
+                places.extend(
+                    get_places(
+                        origin[0],
+                        origin[1],
+                        radius=radius_m,
+                        activity=activity,
+                        timeout_s=8.0,
+                        limit=per_activity_limit,
+                    )
+                )
+            places = _dedupe_places(places, limit=120)
             search_mode_out = "radius"
             city = ""
 
         data_source = "osm" if places else "demo"
         if not places:
-            places = demo_places(origin[0], origin[1])
+            places = _filter_demo_places_by_primary(demo_places(origin[0], origin[1]), selected_primary)
 
         db_path = str(app.config["SMARTTRIP_DB_PATH"])
         conn = connect_db(db_path)
@@ -201,6 +320,8 @@ def create_app() -> Flask:
             context = {
                 "lang": lang,
                 "user_activity": user_activity,
+                "user_activities": selected_activities,
+                "user_primary_activities": selected_primary,
                 "user_group_type": user_group_type,
                 "user_budget": user_budget,
                 "people_count": people_count,
@@ -215,11 +336,17 @@ def create_app() -> Flask:
             if data_source == "osm" and len(recommendations) < 5:
                 # OSM may return too few candidates for a small radius.
                 # Keep all OSM picks, and top-up with demo candidates.
-                demo_candidates = demo_places(origin[0], origin[1])
+                demo_candidates = _filter_demo_places_by_primary(
+                    demo_places(origin[0], origin[1]),
+                    selected_primary,
+                )
                 demo_ranked = rank_places(demo_candidates, context=context, weights=weights, limit=5)
                 needed = max(0, 5 - len(recommendations))
                 if needed:
-                    recommendations = list(recommendations) + list(demo_ranked[:needed])
+                    recommendations = _dedupe_places(
+                        list(recommendations) + list(demo_ranked[:needed]),
+                        limit=5,
+                    )
                     data_source = "osm+demo"
 
             for i, p in enumerate(recommendations, start=1):
@@ -279,6 +406,7 @@ def create_app() -> Flask:
                 "radius_m": radius_m,
                 "search_mode": search_mode_out,
                 "city": city or None,
+                "activities": selected_activities,
                 "data_source": data_source,
                 "recommendations": recommendations,
             }

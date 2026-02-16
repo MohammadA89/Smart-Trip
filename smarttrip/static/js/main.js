@@ -256,6 +256,76 @@
     },
   };
 
+  const CATEGORY_TREE = [
+    {
+      id: "food_drink",
+      label: { en: "Food & Drink", fa: "غذا و نوشیدنی" },
+      items: [
+        { id: "restaurant", label: { en: "Restaurant", fa: "رستوران" } },
+        { id: "fast_food", label: { en: "Fast Food", fa: "فست فود" } },
+        { id: "cafe", label: { en: "Cafe", fa: "کافه" } },
+        { id: "juice", label: { en: "Juice", fa: "آبمیوه" } },
+        { id: "ice_cream", label: { en: "Ice Cream", fa: "بستنی" } },
+      ],
+    },
+    {
+      id: "fun",
+      label: { en: "Fun & Entertainment", fa: "تفریح و سرگرمی" },
+      items: [
+        { id: "park", label: { en: "Park", fa: "پارک" } },
+        { id: "attraction", label: { en: "Attraction", fa: "مکان دیدنی" } },
+        { id: "nature_tourism", label: { en: "Nature Tourism", fa: "طبیعت گردی" } },
+        { id: "historical", label: { en: "Historical", fa: "مکان تاریخی" } },
+        { id: "cinema", label: { en: "Cinema", fa: "سینما" } },
+        { id: "amusement_park", label: { en: "Amusement Park", fa: "شهربازی" } },
+        { id: "theatre", label: { en: "Theatre", fa: "تئاتر" } },
+        { id: "museum", label: { en: "Museum", fa: "موزه" } },
+        { id: "pool", label: { en: "Pool", fa: "استخر" } },
+      ],
+    },
+    {
+      id: "travel",
+      label: { en: "Travel", fa: "سفر" },
+      items: [
+        { id: "hotel", label: { en: "Hotel", fa: "هتل" } },
+        { id: "eco_lodge", label: { en: "Eco Lodge", fa: "اقامتگاه بومگردی" } },
+        { id: "hostel", label: { en: "Hostel", fa: "اقامتگاه" } },
+      ],
+    },
+    {
+      id: "shopping",
+      label: { en: "Market & Mall", fa: "بازار و مرکز خرید" },
+      items: [
+        { id: "market", label: { en: "Market", fa: "بازار" } },
+        { id: "shopping_mall", label: { en: "Shopping Mall", fa: "مرکز خرید" } },
+      ],
+    },
+  ];
+
+  const DEFAULT_SUBCATEGORIES = ["restaurant", "fast_food", "cafe"];
+
+  const SUBCATEGORY_TO_PRIMARY_ACTIVITY = {
+    restaurant: "restaurant",
+    fast_food: "restaurant",
+    cafe: "cafe",
+    juice: "cafe",
+    ice_cream: "cafe",
+    park: "nature",
+    attraction: "nature",
+    nature_tourism: "nature",
+    historical: "nature",
+    cinema: "entertainment",
+    amusement_park: "entertainment",
+    theatre: "entertainment",
+    museum: "entertainment",
+    pool: "entertainment",
+    hotel: "entertainment",
+    eco_lodge: "nature",
+    hostel: "entertainment",
+    market: "entertainment",
+    shopping_mall: "entertainment",
+  };
+
   function normalizeLang(value) {
     const s = String(value || "").trim().toLowerCase();
     if (s.startsWith("fa")) return "fa";
@@ -278,6 +348,30 @@
     return fmt(t(key), params);
   }
 
+  function categoryText(label) {
+    if (!label || typeof label !== "object") return "";
+    return state.lang === "fa" ? label.fa || label.en || "" : label.en || label.fa || "";
+  }
+
+  function allSubcategoryIds() {
+    return CATEGORY_TREE.flatMap((cat) => cat.items.map((item) => item.id));
+  }
+
+  function normalizeSubcategories(list) {
+    const valid = new Set(allSubcategoryIds());
+    const out = [];
+    for (const item of Array.isArray(list) ? list : []) {
+      const id = String(item || "").trim().toLowerCase();
+      if (!id || !valid.has(id) || out.includes(id)) continue;
+      out.push(id);
+    }
+    return out;
+  }
+
+  function primaryFromSubcategory(id) {
+    return SUBCATEGORY_TO_PRIMARY_ACTIVITY[String(id || "").trim().toLowerCase()] || "nature";
+  }
+
   const dom = {
     prefsForm: $("#prefsForm"),
     ctaBtn: $("#ctaBtn"),
@@ -290,6 +384,7 @@
     radiusField: $("#radiusField"),
     cityField: $("#cityField"),
     cityInput: $("#cityInput"),
+    placeCategories: $("#placeCategories"),
     locationHint: $("#locationHint"),
     useLocationBtn: $("#useLocationBtn"),
     recenterBtn: $("#recenterBtn"),
@@ -329,10 +424,153 @@
     locationState: "idle", // "idle" | "locating" | "enabled"
     markers: [],
     userMarker: null,
+    activeCategory: CATEGORY_TREE[0].id,
+    selectedSubcategories: normalizeSubcategories(DEFAULT_SUBCATEGORIES),
   };
 
   let map = null;
   let markerLayer = null;
+
+  function setSelectedSubcategories(list) {
+    const next = normalizeSubcategories(list);
+    state.selectedSubcategories = next;
+    syncCategoryCheckboxes();
+  }
+
+  function syncCategoryCheckboxes() {
+    if (!dom.placeCategories) return;
+    CATEGORY_TREE.forEach((category) => {
+      const selected = new Set(state.selectedSubcategories);
+      const itemIds = category.items.map((item) => item.id);
+      const allChecked = itemIds.every((id) => selected.has(id));
+
+      const allEl = dom.placeCategories.querySelector(
+        `input.subcategory-all[data-category="${category.id}"]`
+      );
+      if (allEl instanceof HTMLInputElement) allEl.checked = allChecked;
+
+      category.items.forEach((item) => {
+        const el = dom.placeCategories.querySelector(
+          `input.subcategory-checkbox[data-category="${category.id}"][value="${item.id}"]`
+        );
+        if (el instanceof HTMLInputElement) el.checked = selected.has(item.id);
+      });
+    });
+  }
+
+  function setActiveCategory(categoryId) {
+    state.activeCategory = categoryId;
+    if (!dom.placeCategories) return;
+    dom.placeCategories.querySelectorAll(".category-tab").forEach((btn) => {
+      if (!(btn instanceof HTMLButtonElement)) return;
+      const isActive = btn.dataset.category === categoryId;
+      btn.classList.toggle("is-active", isActive);
+      btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+    dom.placeCategories.querySelectorAll(".category-panel").forEach((panel) => {
+      if (!(panel instanceof HTMLElement)) return;
+      panel.hidden = panel.dataset.category !== categoryId;
+    });
+  }
+
+  function renderCategoryPicker() {
+    if (!dom.placeCategories) return;
+    const selected = new Set(state.selectedSubcategories);
+    const selectAllText = state.lang === "fa" ? "انتخاب همه" : "Select all";
+
+    const tabsHtml = CATEGORY_TREE.map((category) => {
+      const isActive = category.id === state.activeCategory;
+      return `<button class="category-tab${isActive ? " is-active" : ""}" type="button" data-category="${
+        category.id
+      }" aria-pressed="${isActive ? "true" : "false"}">${escapeHtml(
+        categoryText(category.label)
+      )}</button>`;
+    }).join("");
+
+    const panelsHtml = CATEGORY_TREE.map((category) => {
+      const ids = category.items.map((item) => item.id);
+      const allChecked = ids.every((id) => selected.has(id));
+      const optionsHtml = category.items
+        .map(
+          (item) => `
+          <label class="subcategory">
+            <input class="subcategory-checkbox" type="checkbox" data-category="${category.id}" value="${
+              item.id
+            }" ${selected.has(item.id) ? "checked" : ""}/>
+            <span>${escapeHtml(categoryText(item.label))}</span>
+          </label>`
+        )
+        .join("");
+      return `
+        <div class="category-panel" data-category="${category.id}" ${category.id === state.activeCategory ? "" : "hidden"}>
+          <div class="subcategory-list">
+            <label class="subcategory is-all">
+              <input class="subcategory-all" type="checkbox" data-category="${category.id}" ${
+                allChecked ? "checked" : ""
+              }/>
+              <span>${escapeHtml(selectAllText)}</span>
+            </label>
+            ${optionsHtml}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    dom.placeCategories.innerHTML = `<div class="category-tabs">${tabsHtml}</div><div class="category-panels">${panelsHtml}</div>`;
+
+    dom.placeCategories.querySelectorAll(".category-tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!(btn instanceof HTMLButtonElement)) return;
+        const categoryId = btn.dataset.category || CATEGORY_TREE[0].id;
+        setActiveCategory(categoryId);
+        const category = CATEGORY_TREE.find((c) => c.id === categoryId);
+        if (!category) return;
+        const ids = category.items.map((item) => item.id);
+        // Category switch is exclusive: keep only this category's subcategories.
+        setSelectedSubcategories(ids);
+        updateEngine(getPrefs());
+      });
+    });
+
+    dom.placeCategories.querySelectorAll(".subcategory-all").forEach((el) => {
+      el.addEventListener("change", () => {
+        if (!(el instanceof HTMLInputElement)) return;
+        const categoryId = String(el.dataset.category || "");
+        const category = CATEGORY_TREE.find((c) => c.id === categoryId);
+        if (!category) return;
+        const ids = category.items.map((item) => item.id);
+        if (el.checked) {
+          // "Select all" is exclusive to this category.
+          setSelectedSubcategories(ids);
+        } else {
+          setSelectedSubcategories([]);
+        }
+        updateEngine(getPrefs());
+      });
+    });
+
+    dom.placeCategories.querySelectorAll(".subcategory-checkbox").forEach((el) => {
+      el.addEventListener("change", () => {
+        if (!(el instanceof HTMLInputElement)) return;
+        const categoryId = String(el.dataset.category || "");
+        const category = CATEGORY_TREE.find((c) => c.id === categoryId);
+        if (!category) return;
+        const id = String(el.value || "").trim().toLowerCase();
+        // Keep edits scoped to active category only.
+        const next = new Set(
+          category.items
+            .map((item) => item.id)
+            .filter((itemId) => state.selectedSubcategories.includes(itemId))
+        );
+        if (el.checked) next.add(id);
+        else next.delete(id);
+        setSelectedSubcategories([...next]);
+        updateEngine(getPrefs());
+      });
+    });
+
+    syncCategoryCheckboxes();
+  }
 
   function showToast(message) {
     if (!dom.toast) return;
@@ -397,6 +635,7 @@
     });
 
     // Dynamic / state-driven labels
+    renderCategoryPicker();
     updateLocationButton();
     setChatStatus(state.chatState === "thinking" ? t("chat_status_thinking") : t("chat_status_ready"));
     setLoading(state.isLoading);
@@ -469,7 +708,15 @@
       updateRadiusLabel();
     }
 
-    if (typeof updates.activity === "string") setRadio("activity", updates.activity);
+    if (Array.isArray(updates.activities)) {
+      setSelectedSubcategories(updates.activities);
+    } else if (typeof updates.activity === "string") {
+      const v = String(updates.activity || "").trim().toLowerCase();
+      if (v === "cafe") setSelectedSubcategories(["cafe"]);
+      else if (v === "restaurant") setSelectedSubcategories(["restaurant"]);
+      else if (v === "entertainment") setSelectedSubcategories(["cinema"]);
+      else setSelectedSubcategories(["park"]);
+    }
     if (typeof updates.group_type === "string") setRadio("group_type", updates.group_type);
     if (typeof updates.budget === "string") setRadio("budget", updates.budget);
 
@@ -512,6 +759,14 @@
     const cityRaw = dom.cityInput?.value || "";
     const city = String(cityRaw).trim();
 
+    let activities = normalizeSubcategories(state.selectedSubcategories);
+    if (!activities.length) {
+      const active = CATEGORY_TREE.find((c) => c.id === state.activeCategory) || CATEGORY_TREE[0];
+      activities = active ? active.items.map((item) => item.id) : ["park"];
+      setSelectedSubcategories(activities);
+    }
+    const primaryActivity = primaryFromSubcategory(activities[0] || "park");
+
     return {
       has_car: !!dom.hasCar?.checked,
       people_count: Number(dom.peopleCount?.value || 3),
@@ -520,7 +775,8 @@
       city: searchMode === "city" && city ? city : undefined,
       group_type: getRadioValue("group_type", "friends"),
       budget: getRadioValue("budget", "medium"),
-      activity: getRadioValue("activity", "nature"),
+      activities,
+      activity: primaryActivity,
     };
   }
 
@@ -543,7 +799,12 @@
     if (v === "cafe") return t("act_cafe");
     if (v === "restaurant") return t("act_restaurant");
     if (v === "entertainment") return t("act_entertainment");
-    return t("act_nature");
+    if (v === "nature") return t("act_nature");
+    for (const category of CATEGORY_TREE) {
+      const item = category.items.find((it) => it.id === v);
+      if (item) return categoryText(item.label);
+    }
+    return v || t("act_nature");
   }
 
   function labelDataSource(value) {
@@ -566,7 +827,8 @@
 
   function iconSvg(type) {
     const t = String(type || "").toLowerCase();
-    if (t === "cafe") {
+    const primary = primaryFromSubcategory(t);
+    if (primary === "cafe") {
       return `
         <svg viewBox="0 0 24 24" fill="none">
           <path d="M4 8h12v5a6 6 0 0 1-6 6H8a4 4 0 0 1-4-4V8Z" stroke="currentColor" stroke-width="1.5" />
@@ -575,14 +837,14 @@
           <path d="M10 4s1 1 1 2-1 2-1 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
         </svg>`;
     }
-    if (t === "restaurant") {
+    if (primary === "restaurant") {
       return `
         <svg viewBox="0 0 24 24" fill="none">
           <path d="M7 3v8M10 3v8M7 7h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           <path d="M14 3v7a3 3 0 0 0 3 3v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
         </svg>`;
     }
-    if (t === "entertainment") {
+    if (primary === "entertainment") {
       return `
         <svg viewBox="0 0 24 24" fill="none">
           <path d="M4 7h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" stroke="currentColor" stroke-width="1.5" />
@@ -633,7 +895,12 @@
     }
     chips.push(tr("chip_group", { group: labelGroup(prefs.group_type) }));
     chips.push(tr("chip_budget", { budget: labelBudget(prefs.budget) }));
-    chips.push(tr("chip_activity", { activity: labelActivity(prefs.activity) }));
+    const labels = (prefs.activities || []).map((id) => labelActivity(id));
+    const activitySummary =
+      labels.length <= 2
+        ? labels.join(" / ")
+        : `${labels.slice(0, 2).join(" / ")} +${labels.length - 2}`;
+    chips.push(tr("chip_activity", { activity: activitySummary || labelActivity(prefs.activity) }));
 
     dom.personalChips.innerHTML = chips
       .map((text) => `<span class="chiplet">${escapeHtml(text)}</span>`)
@@ -1048,9 +1315,14 @@
 
   function typeLabel(type) {
     const kind = String(type || "").toLowerCase();
-    if (kind === "cafe") return t("type_cafe");
-    if (kind === "restaurant") return t("type_restaurant");
-    if (kind === "entertainment") return t("type_entertainment");
+    for (const category of CATEGORY_TREE) {
+      const item = category.items.find((it) => it.id === kind);
+      if (item) return categoryText(item.label);
+    }
+    const primary = primaryFromSubcategory(kind);
+    if (primary === "cafe") return t("type_cafe");
+    if (primary === "restaurant") return t("type_restaurant");
+    if (primary === "entertainment") return t("type_entertainment");
     return t("type_nature");
   }
 
@@ -1111,7 +1383,7 @@
       });
     });
 
-    document.querySelectorAll('input[name="group_type"], input[name="budget"], input[name="activity"], #hasCar').forEach((el) => {
+    document.querySelectorAll('input[name="group_type"], input[name="budget"], #hasCar').forEach((el) => {
       el.addEventListener("change", () => updateEngine(getPrefs()));
     });
 
@@ -1174,6 +1446,7 @@
 
   function boot() {
     state.sessionId = getSessionId();
+    setSelectedSubcategories(state.selectedSubcategories);
     setLang(detectInitialLang());
     updatePeopleLabel();
     updateRadiusLabel();

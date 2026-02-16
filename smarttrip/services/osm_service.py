@@ -31,9 +31,70 @@ _DEFAULTS_BY_ACTIVITY = {
     },
 }
 
+_ACTIVITY_FAMILY = {
+    "fast_food": "restaurant",
+    "juice": "cafe",
+    "ice_cream": "cafe",
+    "park": "nature",
+    "attraction": "nature",
+    "nature_tourism": "nature",
+    "historical": "nature",
+    "cinema": "entertainment",
+    "amusement_park": "entertainment",
+    "theatre": "entertainment",
+    "museum": "entertainment",
+    "pool": "entertainment",
+    "hotel": "entertainment",
+    "eco_lodge": "nature",
+    "hostel": "entertainment",
+    "market": "entertainment",
+    "shopping_mall": "entertainment",
+}
+
 
 def _activity_filters(activity: str) -> List[Tuple[str, str]]:
     activity = (activity or "").strip().lower()
+    if activity == "fast_food":
+        return [("amenity", "fast_food"), ("amenity", "food_court")]
+    if activity == "juice":
+        return [("amenity", "juice_bar"), ("amenity", "cafe")]
+    if activity == "ice_cream":
+        return [("amenity", "ice_cream")]
+    if activity == "park":
+        return [("leisure", "park"), ("leisure", "garden")]
+    if activity == "attraction":
+        return [("tourism", "attraction"), ("tourism", "viewpoint"), ("tourism", "picnic_site")]
+    if activity == "nature_tourism":
+        return [
+            ("boundary", "national_park"),
+            ("leisure", "nature_reserve"),
+            ("tourism", "viewpoint"),
+            ("tourism", "picnic_site"),
+            ("natural", "beach"),
+            ("natural", "wood"),
+        ]
+    if activity == "historical":
+        return [("historic", "monument"), ("historic", "castle"), ("historic", "yes"), ("tourism", "museum")]
+    if activity == "cinema":
+        return [("amenity", "cinema")]
+    if activity == "amusement_park":
+        return [("tourism", "theme_park"), ("leisure", "amusement_arcade"), ("leisure", "water_park")]
+    if activity == "theatre":
+        return [("amenity", "theatre"), ("amenity", "arts_centre")]
+    if activity == "museum":
+        return [("tourism", "museum"), ("tourism", "gallery")]
+    if activity == "pool":
+        return [("leisure", "swimming_pool"), ("sport", "swimming")]
+    if activity == "hotel":
+        return [("tourism", "hotel"), ("tourism", "motel")]
+    if activity == "eco_lodge":
+        return [("tourism", "guest_house"), ("tourism", "chalet"), ("tourism", "camp_site")]
+    if activity == "hostel":
+        return [("tourism", "hostel"), ("tourism", "guest_house"), ("tourism", "apartment")]
+    if activity == "market":
+        return [("shop", "supermarket"), ("amenity", "marketplace")]
+    if activity == "shopping_mall":
+        return [("shop", "mall"), ("shop", "department_store"), ("building", "retail")]
     if activity == "cafe":
         return [("amenity", "cafe"), ("amenity", "ice_cream")]
     if activity == "restaurant":
@@ -304,7 +365,8 @@ def get_places_city(
         return []
 
     filters = _activity_filters(activity)
-    defaults = _DEFAULTS_BY_ACTIVITY.get(activity, _DEFAULTS_BY_ACTIVITY["nature"])
+    family = _ACTIVITY_FAMILY.get(activity, activity)
+    defaults = _DEFAULTS_BY_ACTIVITY.get(family, _DEFAULTS_BY_ACTIVITY["nature"])
 
     overpass_timeout = int(max(5, min(25, round(timeout_s))))
 
@@ -433,7 +495,8 @@ def get_places(
     limit = max(1, min(200, limit))
     candidate_limit = max(100, min(280, limit * 2))
 
-    defaults = _DEFAULTS_BY_ACTIVITY.get(activity, _DEFAULTS_BY_ACTIVITY["nature"])
+    family = _ACTIVITY_FAMILY.get(activity, activity)
+    defaults = _DEFAULTS_BY_ACTIVITY.get(family, _DEFAULTS_BY_ACTIVITY["nature"])
 
     key = _cache_key(lat, lon, radius, activity)
     cached = _cache.get(key)

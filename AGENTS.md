@@ -77,6 +77,7 @@ Smart Trip is a Flask web application that recommends nearby or city-based trave
 
 ## Deployment Notes
 - Local development command: `python app.py`.
+- Windows quick-start command: `.\run.ps1`; it creates `.venv`, installs dependencies, and starts Flask on `127.0.0.1:5000`.
 - Install dependencies with `python -m pip install -r requirements.txt`.
 - For production, run through a real WSGI server and disable Flask debug mode.
 - Ensure outbound access to OpenStreetMap services if live recommendations are required.
@@ -86,4 +87,4 @@ Smart Trip is a Flask web application that recommends nearby or city-based trave
 - Add explicit configuration for host, port, debug mode, and external API timeouts.
 - Add rate limiting and caching for OpenStreetMap requests.
 - Add structured logging.
-- Improve README encoding and setup documentation.
+- Repair the remaining mojibake-encoded Persian literals in Python source files.

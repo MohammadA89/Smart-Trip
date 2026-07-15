@@ -53,26 +53,6 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def _canonical_activity(activity: Any) -> str:
     a = str(activity or "").strip().lower()
-    alias = {
-        "fast_food": "restaurant",
-        "juice": "cafe",
-        "ice_cream": "cafe",
-        "park": "nature",
-        "attraction": "nature",
-        "nature_tourism": "nature",
-        "historical": "nature",
-        "cinema": "entertainment",
-        "amusement_park": "entertainment",
-        "theatre": "entertainment",
-        "museum": "entertainment",
-        "pool": "entertainment",
-        "hotel": "entertainment",
-        "eco_lodge": "nature",
-        "hostel": "entertainment",
-        "market": "entertainment",
-        "shopping_mall": "entertainment",
-    }
-    a = alias.get(a, a)
     return a if a in {"nature", "cafe", "restaurant", "entertainment"} else "nature"
 
 
@@ -157,7 +137,6 @@ def build_features(
     place: Dict[str, Any],
     *,
     user_activity: str,
-    user_activities: Optional[List[str]] = None,
     user_group_type: str,
     user_budget: str,
     people_count: Any,
@@ -170,14 +149,10 @@ def build_features(
     budget = _canonical_budget(user_budget)
     has_car_bool = bool(has_car)
 
-    selected_types = {_canonical_activity(user_activity)}
-    for raw in user_activities or []:
-        selected_types.add(_canonical_activity(raw))
-
     place_type = _canonical_activity(place.get("type") or place.get("activity") or activity)
-    if place_type in selected_types:
+    if place_type == activity:
         activity_fit = 1.0
-    elif place_type in {"cafe", "restaurant"} and selected_types.intersection({"cafe", "restaurant"}):
+    elif {place_type, activity} == {"cafe", "restaurant"}:
         activity_fit = 0.65
     else:
         activity_fit = 0.25
@@ -252,9 +227,6 @@ def score_place(
     features, distance_km = build_features(
         place,
         user_activity=str(context.get("user_activity") or "nature"),
-        user_activities=[
-            str(x) for x in (context.get("user_activities") or context.get("user_primary_activities") or [])
-        ],
         user_group_type=str(context.get("user_group_type") or "friends"),
         user_budget=str(context.get("user_budget") or "medium"),
         people_count=context.get("people_count", 2),
@@ -395,9 +367,6 @@ def build_features_from_context(place: Dict[str, Any], context: Dict[str, Any]) 
     features, _ = build_features(
         place,
         user_activity=str(context.get("user_activity") or "nature"),
-        user_activities=[
-            str(x) for x in (context.get("user_activities") or context.get("user_primary_activities") or [])
-        ],
         user_group_type=str(context.get("user_group_type") or "friends"),
         user_budget=str(context.get("user_budget") or "medium"),
         people_count=context.get("people_count", 2),
